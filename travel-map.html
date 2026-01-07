@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Map - Countries Visited</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: white;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4a90d9;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: #3a7fc8;
+        }
+
+        .legend {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .legend h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .legend-gradient {
+            height: 20px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #777;
+        }
+
+        .visited-list {
+            margin-top: 20px;
+        }
+
+        .visited-list h3 {
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            color: #555;
+        }
+
+        .visited-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .visited-item .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .visited-item .info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .visited-item .date {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .visited-item .remove {
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            padding: 2px 6px;
+            width: auto;
+            margin: 0;
+        }
+
+        .visited-item .remove:hover {
+            color: #e74c3c;
+            background: none;
+        }
+
+        #map {
+            flex: 1;
+            height: 100vh;
+        }
+
+        .country-suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: calc(100% - 40px);
+            z-index: 1001;
+            display: none;
+        }
+
+        .country-suggestions div {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .country-suggestions div:hover,
+        .country-suggestions div.selected {
+            background: #e0e7ff;
+        }
+
+        .file-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .file-buttons button {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+            background: #6b7280;
+        }
+
+        .file-buttons button:hover {
+            background: #4b5563;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .save-status {
+            font-size: 11px;
+            color: #888;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .save-status.connected {
+            color: #22863a;
+        }
+
+        .save-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+        }
+
+        .save-status.connected .dot {
+            background: #22863a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>Travel Map</h1>
+
+            <div class="input-group" style="position: relative;">
+                <label for="country">Country / US State</label>
+                <input type="text" id="country" placeholder="Start typing..." autocomplete="off">
+                <div class="country-suggestions" id="suggestions"></div>
+            </div>
+
+            <div class="input-group">
+                <label for="visit-year">Year Visited</label>
+                <input type="number" id="visit-year" min="1900" max="2099" placeholder="e.g. 2023">
+            </div>
+
+            <button onclick="addVisit()">Add Visit</button>
+
+            <div class="file-buttons">
+                <button onclick="setupAutoSave()">Set Save File</button>
+                <button onclick="exportCSV()">Export</button>
+                <button onclick="document.getElementById('file-input').click()">Import</button>
+                <input type="file" id="file-input" accept=".csv" onchange="importCSV(event)">
+            </div>
+            <div class="save-status" id="save-status">
+                <span class="dot"></span>
+                <span id="status-text">Using browser storage</span>
+            </div>
+
+            <div class="legend">
+                <h3>Year Color Scale</h3>
+                <div class="legend-gradient" id="legend-gradient"></div>
+                <div class="legend-labels">
+                    <span id="min-year">-</span>
+                    <span id="max-year">-</span>
+                </div>
+            </div>
+
+            <div class="visited-list">
+                <h3>Places Visited (<span id="visit-count">0</span>)</h3>
+                <div id="visited-items"></div>
+            </div>
+        </div>
+
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map', {
+            center: [20, 0],
+            zoom: 2,
+            minZoom: 1,
+            maxZoom: 8,
+            worldCopyJump: true
+        });
+
+        // Store visited countries/states
+        let visitedCountries = {};
+        let countriesLayer = null;
+        let statesLayer = null;
+        let provincesLayer = null;
+        let countryNames = [];
+        let stateNames = [];
+        let provinceNames = [];
+        let fileHandle = null;
+
+        // IndexedDB for storing file handle
+        const DB_NAME = 'TravelMapDB';
+        const STORE_NAME = 'fileHandles';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (e) => {
+                    e.target.result.createObjectStore(STORE_NAME);
+                };
+            });
+        }
+
+        async function saveFileHandle(handle) {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(handle, 'savedFileHandle');
+            return new Promise((resolve, reject) => {
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function getStoredFileHandle() {
+            const db = await openDB();
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const request = tx.objectStore(STORE_NAME).get('savedFileHandle');
+            return new Promise((resolve, reject) => {
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function dataToCSV() {
+            const rows = [['Place', 'Year']];
+            Object.entries(visitedCountries).forEach(([place, year]) => {
+                const escapedPlace = place.includes(',') || place.includes('"')
+                    ? `"${place.replace(/"/g, '""')}"`
+                    : place;
+                rows.push([escapedPlace, year]);
+            });
+            return rows.map(row => row.join(',')).join('\n');
+        }
+
+        function parseCSV(text) {
+            const data = {};
+            const lines = text.split('\n').filter(line => line.trim());
+            const startIdx = lines[0]?.toLowerCase().includes('place') ? 1 : 0;
+
+            for (let i = startIdx; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                let place, year;
+                if (line.startsWith('"')) {
+                    const endQuote = line.indexOf('",', 1);
+                    if (endQuote > 0) {
+                        place = line.substring(1, endQuote).replace(/""/g, '"');
+                        year = line.substring(endQuote + 2).trim();
+                    }
+                } else {
+                    const parts = line.split(',');
+                    place = parts[0]?.trim();
+                    year = parts[1]?.trim();
+                }
+
+                if (place && year && !isNaN(parseInt(year))) {
+                    data[place] = year;
+                }
+            }
+            return data;
+        }
+
+        async function autoSave() {
+            // Always save to localStorage as backup
+            localStorage.setItem('visitedCountries', JSON.stringify(visitedCountries));
+
+            // If we have a file handle, save to file
+            if (fileHandle) {
+                try {
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(dataToCSV());
+                    await writable.close();
+                } catch (err) {
+                    console.error('Auto-save to file failed:', err);
+                    updateSaveStatus(false);
+                }
+            }
+        }
+
+        async function loadFromFile(handle) {
+            try {
+                const file = await handle.getFile();
+                const text = await file.text();
+                return parseCSV(text);
+            } catch (err) {
+                console.error('Failed to load from file:', err);
+                return null;
+            }
+        }
+
+        function updateSaveStatus(connected, filename = '') {
+            const statusDiv = document.getElementById('save-status');
+            const statusText = document.getElementById('status-text');
+
+            if (connected) {
+                statusDiv.classList.add('connected');
+                statusText.textContent = `Auto-saving to ${filename}`;
+            } else {
+                statusDiv.classList.remove('connected');
+                statusText.textContent = 'Using browser storage';
+            }
+        }
+
+        async function setupAutoSave() {
+            if (!window.showSaveFilePicker) {
+                alert('Auto-save to file is not supported in this browser. Your data is still saved in browser storage and you can use Export/Import.');
+                return;
+            }
+
+            try {
+                fileHandle = await window.showSaveFilePicker({
+                    suggestedName: 'travel-map-data.csv',
+                    types: [{
+                        description: 'CSV Files',
+                        accept: { 'text/csv': ['.csv'] }
+                    }]
+                });
+
+                await saveFileHandle(fileHandle);
+                await autoSave();
+                updateSaveStatus(true, fileHandle.name);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Failed to set up auto-save:', err);
+                }
+            }
+        }
+
+        async function initializeData() {
+            // Try to restore file handle from IndexedDB
+            try {
+                const storedHandle = await getStoredFileHandle();
+                if (storedHandle) {
+                    // Request permission to access the file
+                    const permission = await storedHandle.requestPermission({ mode: 'readwrite' });
+                    if (permission === 'granted') {
+                        fileHandle = storedHandle;
+                        const fileData = await loadFromFile(fileHandle);
+                        if (fileData) {
+                            visitedCountries = fileData;
+                            updateSaveStatus(true, fileHandle.name);
+                            return;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.log('No stored file handle or permission denied, using localStorage');
+            }
+
+            // Fall back to localStorage
+            visitedCountries = JSON.parse(localStorage.getItem('visitedCountries') || '{}');
+        }
+
+        // Initialize data on load
+        initializeData().then(() => {
+            if (countriesLayer || statesLayer) {
+                refreshMap();
+            }
+        });
+
+        // Color scale for years (warm heatmap: dark red -> red -> orange -> yellow)
+        function getColorForYear(year, minYear, maxYear) {
+            if (minYear === maxYear) {
+                return '#ff6b35';
+            }
+            const ratio = (year - minYear) / (maxYear - minYear);
+
+            // Warm heatmap colormap (oldest = dark red, newest = bright yellow)
+            const colors = [
+                [128, 0, 0],      // dark red
+                [180, 30, 20],    // deep red
+                [220, 60, 30],    // red
+                [245, 130, 40],   // orange
+                [255, 200, 50],   // yellow-orange
+                [255, 235, 80]    // bright yellow
+            ];
+
+            const idx = ratio * (colors.length - 1);
+            const lower = Math.floor(idx);
+            const upper = Math.ceil(idx);
+            const t = idx - lower;
+
+            const r = Math.round(colors[lower][0] + t * (colors[upper][0] - colors[lower][0]));
+            const g = Math.round(colors[lower][1] + t * (colors[upper][1] - colors[lower][1]));
+            const b = Math.round(colors[lower][2] + t * (colors[upper][2] - colors[lower][2]));
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function getYearRange() {
+            const years = Object.values(visitedCountries).map(y => parseInt(y));
+            if (years.length === 0) return { min: new Date().getFullYear(), max: new Date().getFullYear() };
+            return {
+                min: Math.min(...years),
+                max: Math.max(...years)
+            };
+        }
+
+        function updateLegend() {
+            const range = getYearRange();
+            document.getElementById('min-year').textContent = range.min;
+            document.getElementById('max-year').textContent = range.max;
+
+            // Create gradient
+            const gradient = [];
+            for (let i = 0; i <= 100; i += 10) {
+                const year = range.min + (i / 100) * (range.max - range.min);
+                gradient.push(getColorForYear(year, range.min, range.max));
+            }
+            document.getElementById('legend-gradient').style.background =
+                `linear-gradient(to right, ${gradient.join(', ')})`;
+        }
+
+        function getFeatureName(feature) {
+            // Handle US states
+            if (feature.properties.NAME && feature.properties.STATEFP) {
+                return feature.properties.NAME + ', USA';
+            }
+            // Handle Canadian provinces
+            if (feature.properties.NAME && feature.properties.PRUID) {
+                return feature.properties.NAME + ', Canada';
+            }
+            // Handle countries
+            return feature.properties.ADMIN || feature.properties.name;
+        }
+
+        function styleFeature(feature) {
+            const name = getFeatureName(feature);
+            const visitYear = visitedCountries[name];
+            const range = getYearRange();
+
+            if (visitYear) {
+                const year = parseInt(visitYear);
+                return {
+                    fillColor: getColorForYear(year, range.min, range.max),
+                    weight: 1,
+                    opacity: 1,
+                    color: '#666',
+                    fillOpacity: 0.8
+                };
+            }
+
+            return {
+                fillColor: '#ffffff',
+                weight: 1,
+                opacity: 1,
+                color: '#999',
+                fillOpacity: 1
+            };
+        }
+
+        function onEachFeature(feature, layer, parentLayer) {
+            const name = getFeatureName(feature);
+
+            layer.on({
+                mouseover: function(e) {
+                    const layer = e.target;
+                    layer.setStyle({
+                        weight: 2,
+                        color: '#333'
+                    });
+                    layer.bringToFront();
+                },
+                mouseout: function(e) {
+                    e.target.setStyle(styleFeature(feature));
+                },
+                click: function(e) {
+                    document.getElementById('country').value = name;
+                    document.getElementById('suggestions').style.display = 'none';
+                }
+            });
+
+            updateTooltip(layer, name);
+        }
+
+        function updateTooltip(layer, countryName) {
+            const visitYear = visitedCountries[countryName];
+            const tooltip = visitYear
+                ? `${countryName}<br>Visited: ${visitYear}`
+                : countryName;
+            layer.unbindTooltip();
+            layer.bindTooltip(tooltip);
+        }
+
+        function updateVisitedList() {
+            const container = document.getElementById('visited-items');
+            const range = getYearRange();
+            const entries = Object.entries(visitedCountries).sort((a, b) =>
+                parseInt(b[1]) - parseInt(a[1])
+            );
+
+            document.getElementById('visit-count').textContent = entries.length;
+
+            container.innerHTML = entries.map(([country, year]) => {
+                const yearNum = parseInt(year);
+                const color = getColorForYear(yearNum, range.min, range.max);
+                return `
+                    <div class="visited-item">
+                        <div class="info">
+                            <span class="color-dot" style="background: ${color}"></span>
+                            <span>${country}</span>
+                        </div>
+                        <span class="date">${year}</span>
+                        <button class="remove" onclick="removeVisit('${country.replace(/'/g, "\\'")}')">&times;</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function refreshMap() {
+            if (countriesLayer) {
+                countriesLayer.eachLayer(function(layer) {
+                    const name = getFeatureName(layer.feature);
+                    layer.setStyle(styleFeature(layer.feature));
+                    updateTooltip(layer, name);
+                });
+            }
+            if (statesLayer) {
+                statesLayer.eachLayer(function(layer) {
+                    const name = getFeatureName(layer.feature);
+                    layer.setStyle(styleFeature(layer.feature));
+                    updateTooltip(layer, name);
+                });
+            }
+            if (provincesLayer) {
+                provincesLayer.eachLayer(function(layer) {
+                    const name = getFeatureName(layer.feature);
+                    layer.setStyle(styleFeature(layer.feature));
+                    updateTooltip(layer, name);
+                });
+            }
+            updateLegend();
+            updateVisitedList();
+        }
+
+        function addVisit() {
+            const countryInput = document.getElementById('country');
+            const yearInput = document.getElementById('visit-year');
+
+            const country = countryInput.value.trim();
+            const year = yearInput.value;
+
+            if (!country || !year) {
+                alert('Please enter both a country and year');
+                return;
+            }
+
+            // Find matching country/state/province name in our data
+            const allNames = [...countryNames, ...stateNames, ...provinceNames];
+            const matchedName = allNames.find(c =>
+                c.toLowerCase() === country.toLowerCase()
+            );
+
+            if (!matchedName) {
+                alert('Location not found. Please select from the suggestions.');
+                return;
+            }
+
+            visitedCountries[matchedName] = year;
+            autoSave();
+
+            refreshMap();
+
+            countryInput.value = '';
+            yearInput.value = '';
+        }
+
+        function removeVisit(country) {
+            delete visitedCountries[country];
+            autoSave();
+            refreshMap();
+        }
+
+        function exportCSV() {
+            if (Object.keys(visitedCountries).length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            const rows = [['Place', 'Year']];
+            Object.entries(visitedCountries).forEach(([place, year]) => {
+                // Escape quotes in place names
+                const escapedPlace = place.includes(',') || place.includes('"')
+                    ? `"${place.replace(/"/g, '""')}"`
+                    : place;
+                rows.push([escapedPlace, year]);
+            });
+
+            const csv = rows.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'travel-map-data.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n').filter(line => line.trim());
+
+                // Skip header if present
+                const startIdx = lines[0].toLowerCase().includes('place') ? 1 : 0;
+
+                for (let i = startIdx; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    // Parse CSV line (handle quoted fields)
+                    let place, year;
+                    if (line.startsWith('"')) {
+                        const endQuote = line.indexOf('",', 1);
+                        if (endQuote > 0) {
+                            place = line.substring(1, endQuote).replace(/""/g, '"');
+                            year = line.substring(endQuote + 2).trim();
+                        }
+                    } else {
+                        const parts = line.split(',');
+                        place = parts[0].trim();
+                        year = parts[1]?.trim();
+                    }
+
+                    if (place && year && !isNaN(parseInt(year))) {
+                        visitedCountries[place] = year;
+                    }
+                }
+
+                autoSave();
+                refreshMap();
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // Reset file input
+        }
+
+        // Country autocomplete
+        const countryInput = document.getElementById('country');
+        const suggestionsDiv = document.getElementById('suggestions');
+        let selectedIndex = -1;
+        let currentMatches = [];
+
+        function updateSuggestions() {
+            const value = countryInput.value.toLowerCase();
+            if (value.length < 1) {
+                suggestionsDiv.style.display = 'none';
+                currentMatches = [];
+                selectedIndex = -1;
+                return;
+            }
+
+            const allNames = [...countryNames, ...stateNames, ...provinceNames];
+            currentMatches = allNames.filter(c =>
+                c.toLowerCase().includes(value)
+            ).slice(0, 10);
+
+            if (currentMatches.length > 0) {
+                renderSuggestions();
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+            selectedIndex = -1;
+        }
+
+        function renderSuggestions() {
+            suggestionsDiv.innerHTML = currentMatches.map((c, idx) =>
+                `<div class="${idx === selectedIndex ? 'selected' : ''}"
+                     onclick="selectCountry('${c.replace(/'/g, "\\'")}')"
+                     onmouseenter="setSelectedIndex(${idx})">${c}</div>`
+            ).join('');
+        }
+
+        function setSelectedIndex(idx) {
+            selectedIndex = idx;
+            renderSuggestions();
+        }
+
+        countryInput.addEventListener('input', updateSuggestions);
+
+        function selectCountry(country) {
+            countryInput.value = country;
+            suggestionsDiv.style.display = 'none';
+            currentMatches = [];
+            selectedIndex = -1;
+            document.getElementById('visit-year').focus();
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.input-group')) {
+                suggestionsDiv.style.display = 'none';
+                selectedIndex = -1;
+            }
+        });
+
+        // Keyboard navigation
+        countryInput.addEventListener('keydown', function(e) {
+            if (suggestionsDiv.style.display === 'none' || currentMatches.length === 0) {
+                return;
+            }
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIndex = Math.min(selectedIndex + 1, currentMatches.length - 1);
+                renderSuggestions();
+                // Scroll selected item into view
+                const items = suggestionsDiv.querySelectorAll('div');
+                if (items[selectedIndex]) {
+                    items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIndex = Math.max(selectedIndex - 1, 0);
+                renderSuggestions();
+                const items = suggestionsDiv.querySelectorAll('div');
+                if (items[selectedIndex]) {
+                    items[selectedIndex].scrollIntoView({ block: 'nearest' });
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (selectedIndex >= 0 && selectedIndex < currentMatches.length) {
+                    selectCountry(currentMatches[selectedIndex]);
+                }
+            } else if (e.key === 'Escape') {
+                suggestionsDiv.style.display = 'none';
+                selectedIndex = -1;
+            }
+        });
+
+        // Enter key on year field to submit
+        document.getElementById('visit-year').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addVisit();
+            }
+        });
+
+        // Load GeoJSON data
+        const countriesUrl = 'https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson';
+        const statesUrl = 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
+        const provincesUrl = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/canada.geojson';
+
+        Promise.all([
+            fetch(countriesUrl).then(r => r.json()),
+            fetch(statesUrl).then(r => r.json()),
+            fetch(provincesUrl).then(r => r.json())
+        ]).then(([countriesData, statesData, provincesData]) => {
+            // Filter out USA and Canada from countries (we'll use states/provinces instead)
+            countriesData.features = countriesData.features.filter(f => {
+                const name = f.properties.ADMIN || f.properties.name;
+                return name !== 'United States of America' && name !== 'Canada';
+            });
+
+            // Extract country names (without USA and Canada)
+            countryNames = countriesData.features.map(f =>
+                f.properties.ADMIN || f.properties.name
+            ).filter(Boolean).sort();
+
+            // Extract state names with ", USA" suffix
+            stateNames = statesData.features.map(f => f.properties.name + ', USA').sort();
+
+            // Extract province names with ", Canada" suffix
+            provinceNames = provincesData.features.map(f => f.properties.name + ', Canada').sort();
+
+            // Add countries layer
+            countriesLayer = L.geoJSON(countriesData, {
+                style: styleFeature,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+
+            // Add states layer on top
+            statesLayer = L.geoJSON(statesData, {
+                style: styleFeature,
+                onEachFeature: function(feature, layer) {
+                    // Add STATEFP property for identification
+                    feature.properties.STATEFP = feature.properties.density ? '1' : '1';
+                    feature.properties.NAME = feature.properties.name;
+                    onEachFeature(feature, layer);
+                }
+            }).addTo(map);
+
+            // Add provinces layer on top
+            provincesLayer = L.geoJSON(provincesData, {
+                style: styleFeature,
+                onEachFeature: function(feature, layer) {
+                    // Add PRUID property for identification
+                    feature.properties.PRUID = '1';
+                    feature.properties.NAME = feature.properties.name;
+                    onEachFeature(feature, layer);
+                }
+            }).addTo(map);
+
+            refreshMap();
+        }).catch(err => {
+            console.error('Error loading map data:', err);
+            alert('Failed to load map data. Please refresh the page.');
+        });
+
+        // Set default year to current year
+        document.getElementById('visit-year').value = new Date().getFullYear();
+    </script>
+</body>
+</html>
